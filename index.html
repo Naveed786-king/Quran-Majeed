@@ -1,46 +1,484 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quran Majeed with Urdu Translation</title>
-    <link rel="stylesheet" href="index.css" />
-    <script type="importmap">
-      {
-        "imports": {
-          "@google/genai": "https://esm.run/@google/genai"
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quran Majeed — Arabic + Urdu (Junagarhi) — Single File</title>
+  <style>
+    :root{
+      --accent:#0b7040;
+      --muted:#6b6b6b;
+      --bg:#fbfbfb;
+      --card:#ffffff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:#111}
+    #app{display:flex;min-height:100vh;gap:12px;padding:12px}
+    /* sidebar */
+    #sidebar{width:320px;max-width:40%;min-width:220px;background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 20px rgba(11,112,64,0.06);overflow:auto}
+    #sidebar h1{margin:6px 0;font-size:20px;color:var(--accent)}
+    #search{width:100%;padding:8px;border-radius:8px;border:1px solid #e6e6e6;margin-bottom:8px}
+    #surah-list{list-style:none;padding:0;margin:0}
+    #surah-list li{padding:10px;border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:10px}
+    #surah-list li:hover{background:#f1fff6}
+    .num{width:32px;height:32px;border-radius:8px;background:linear-gradient(180deg,#eaf9f0,#d8f0e2);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)}
+    .smeta{font-size:13px;color:var(--muted)}
+    /* main */
+    main{flex:1;display:flex;flex-direction:column;gap:12px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(18,18,18,0.03)}
+    #surah-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    #surah-title{font-size:20px;margin:0}
+    #controls{display:flex;gap:8px;align-items:center}
+    button{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid #dfe}
+    #content-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+    .column{background:#fff;padding:12px;border-radius:12px;min-height:200px;max-height:70vh;overflow:auto}
+    .arabic{font-family:'Scheherazade New', 'Noto Naskh Arabic', serif; font-size:24px; line-height:2;text-align:right}
+    .urdu{font-size:16px;color:#111;line-height:1.7}
+    .ayah{padding:8px;border-radius:8px;margin-bottom:6px}
+    .ayah:hover{background:#fbfbfb}
+    .aya-num{display:inline-block;margin-left:8px;padding:4px 8px;border-radius:10px;background:#f3f7f3;color:var(--muted);font-size:12px}
+    .hidden{display:none}
+    /* responsive */
+    @media (max-width:900px){
+      #app{flex-direction:column;padding:8px}
+      #sidebar{order:2;width:100%;max-width:100%}
+      main{order:1}
+      #content-wrap{grid-template-columns:1fr;max-height:none}
+      .arabic{font-size:28px}
+    }
+    footer{font-size:13px;color:var(--muted);text-align:center;padding:8px}
+    .loader{display:inline-block;width:18px;height:18px;border-radius:50%;border:3px solid #eee;border-top-color:var(--accent);animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* small helpers */
+    .flex{display:flex;gap:8px;align-items:center}
+    select{padding:8px;border-radius:8px;border:1px solid #e6e6e6}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar" class="card" aria-label="Surah list">
+      <h1>Quran Majeed</h1>
+      <input id="search" placeholder="Search Surah name or number..." />
+      <div class="flex" style="margin-bottom:8px">
+        <select id="viewMode" title="View mode">
+          <option value="both">Arabic + Urdu</option>
+          <option value="arabic">Arabic only</option>
+          <option value="urdu">Urdu only</option>
+        </select>
+        <button id="collapseBtn" class="ghost">Toggle Sidebar</button>
+      </div>
+      <ul id="surah-list" aria-live="polite"></ul>
+      <div style="margin-top:12px;color:var(--muted);font-size:13px">
+        <div>Arabic source: Al-Quran Cloud API</div>
+        <div>Urdu translation: Muhammad Junagarhi (QuranEnc)</div>
+      </div>
+    </aside>
+
+    <main>
+      <div id="welcome" class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div>
+            <h2 style="margin:0 0 6px 0">As-salamu alaykum</h2>
+            <div style="color:var(--muted)">Select a Surah on the left to read — Arabic text and Urdu translation will load.</div>
+          </div>
+          <div style="text-align:right;color:var(--muted);font-size:13px">Offline features use <strong>Speech Synthesis</strong> for the translation voice</div>
+        </div>
+      </div>
+
+      <section id="surah-area" class="card hidden">
+        <div id="surah-header">
+          <div>
+            <h3 id="surah-title">—</h3>
+            <div id="surah-meta" class="smeta"></div>
+          </div>
+          <div id="controls">
+            <select id="voiceSelect" title="Choose voice (browser voices)"></select>
+            <button id="playRecitation">Play Recitation (audio)</button>
+            <button id="playTranslation">Play Translation (voice)</button>
+            <button id="stopBtn" class="ghost">Stop</button>
+            <button id="copyLink" class="ghost">Copy Link</button>
+          </div>
+        </div>
+
+        <div id="content-wrap" style="margin-top:12px">
+          <div id="col-ar" class="column arabic">
+            <div id="arabic-content"></div>
+          </div>
+          <div id="col-ur" class="column urdu">
+            <div id="urdu-content"></div>
+          </div>
+        </div>
+      </section>
+
+      <div id="loader" class="card hidden" style="text-align:center">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+          <div class="loader" role="progressbar" aria-hidden="true"></div>
+          <div>Loading Surah...</div>
+        </div>
+      </div>
+
+      <div id="error" class="card hidden" style="color:#a00"></div>
+    </main>
+  </div>
+
+  <footer>Built with public Quran APIs • Arabic: Al-Quran Cloud • Urdu: QuranEnc (Muhammad Junagarhi). If audio doesn't play, your browser/device may block autoplay — click Play manually and ensure sound is allowed.</footer>
+
+  <script>
+  (function(){
+    // API endpoints we will use:
+    // Al-Quran Cloud (Arabic text & recitation audio): https://api.alquran.cloud/v1
+    // QuranEnc (Urdu Junagarhi): https://quranenc.com/api/v1/translation/sura/urdu_junagarhi/{n}
+    // Sources: Al-Quran Cloud docs, QuranEnc docs (used for translation). See page footer for citations.
+
+    const el = (id)=>document.getElementById(id);
+    const surahListEl = el('surah-list');
+    const searchEl = el('search');
+    const loader = el('loader');
+    const errorEl = el('error');
+    const surahArea = el('surah-area');
+    const arabicContent = el('arabic-content');
+    const urduContent = el('urdu-content');
+    const surahTitle = el('surah-title');
+    const surahMeta = el('surah-meta');
+    const playRecitationBtn = el('playRecitation');
+    const playTranslationBtn = el('playTranslation');
+    const stopBtn = el('stopBtn');
+    const voiceSelect = el('voiceSelect');
+    const viewMode = el('viewMode');
+    const collapseBtn = el('collapseBtn');
+    const colAr = el('col-ar');
+    const colUr = el('col-ur');
+    const copyLink = el('copyLink');
+
+    let surahIndexList = []; // list of surah meta from API
+    let currentSurah = null;
+    let currentRecitationAudio = null;
+    let currentTTSUtterance = null;
+    let currentAyahAudioList = []; // if audio edition returns ayah URLs
+    let audioPlayingIndex = 0;
+
+    // small helpers
+    function showLoader(){loader.classList.remove('hidden'); errorEl.classList.add('hidden');}
+    function hideLoader(){loader.classList.add('hidden');}
+    function showError(msg){errorEl.textContent = msg; errorEl.classList.remove('hidden'); loader.classList.add('hidden');}
+    function clearError(){errorEl.classList.add('hidden'); errorEl.textContent='';}
+
+    // fetch surah list
+    async function loadSurahList(){
+      try{
+        const res = await fetch('https://api.alquran.cloud/v1/surah');
+        const json = await res.json();
+        if(json.code !== 200 && json.code !== 'OK') {
+          throw new Error('API returned: ' + JSON.stringify(json));
         }
+        surahIndexList = json.data; // array of 114 surahs
+        renderSurahList(surahIndexList);
+      }catch(err){
+        showError('Failed to load surah list: ' + err.message);
+        console.error(err);
       }
-    </script>
-  </head>
-  <body>
-    <div id="app-container">
-      <nav id="sidebar">
-        <div class="sidebar-header">
-          <h1>Quran Majeed</h1>
-        </div>
-        <ul id="surah-list">
-          <!-- Surahs will be populated by JS -->
-        </ul>
-      </nav>
-      <main id="main-content">
-        <div id="welcome-message">
-          <h2>As-salamu alaykum</h2>
-          <p>Please select a Surah from the list to begin reading.</p>
-        </div>
-        <div id="surah-content" class="hidden">
-          <!-- Surah content will be populated by JS -->
-        </div>
-        <div id="loader" class="hidden">
-          <div class="spinner"></div>
-          <p>Loading Surah...</p>
-        </div>
-         <div id="error-message" class="hidden">
-          <h2>Error</h2>
-          <p>Could not load the Surah. Please try again.</p>
-        </div>
-      </main>
-    </div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+    }
+
+    function renderSurahList(list){
+      surahListEl.innerHTML = '';
+      list.forEach(s=>{
+        const li = document.createElement('li');
+        li.setAttribute('data-number', s.number);
+        li.innerHTML = '<div class="num">'+s.number+'</div><div style="flex:1"><div style="font-weight:700">'+s.englishName+' <span style="font-weight:400;color:var(--muted)">('+s.englishNameTranslation+')</span></div><div class="smeta">'+s.revelationType+' • '+s.numberOfAyahs+' ayahs</div></div>';
+        li.addEventListener('click', ()=>openSurah(s.number));
+        surahListEl.appendChild(li);
+      });
+    }
+
+    // search/filter
+    searchEl.addEventListener('input', ()=>{
+      const q = searchEl.value.trim().toLowerCase();
+      const filtered = surahIndexList.filter(s=>{
+        return String(s.number)===q || s.englishName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.englishNameTranslation.toLowerCase().includes(q);
+      });
+      renderSurahList(q ? filtered : surahIndexList);
+    });
+
+    // open surah: we will fetch Arabic (alquran.cloud) and Urdu (quranenc)
+    async function openSurah(n){
+      clearError();
+      showLoader();
+      surahArea.classList.add('hidden');
+      currentSurah = n;
+      arabicContent.innerHTML = '';
+      urduContent.innerHTML = '';
+      surahTitle.textContent = '—';
+      surahMeta.textContent = '';
+      currentAyahAudioList = [];
+      audioPlayingIndex = 0;
+      // fetch both editions in parallel where possible
+      try{
+        // 1) fetch surah meta and Arabic text (quran-uthmani)
+        const arabicReq = fetch('https://api.alquran.cloud/v1/surah/' + n + '/quran-uthmani');
+        // 2) fetch audio edition (use ar.alafasy as common reciter). We'll attempt to get audio ayah URLs by requesting editions combined:
+        const audioReq = fetch('https://api.alquran.cloud/v1/surah/' + n + '/editions/quran-uthmani,ar.alafasy').catch(()=>null);
+        // 3) fetch urdu translation from quranenc
+        const urduReq = fetch('https://quranenc.com/api/v1/translation/sura/urdu_junagarhi/' + n).catch(()=>null);
+
+        const [arabicRes, audioRes, urduRes] = await Promise.all([arabicReq, audioReq, urduReq]);
+
+        const arabicJson = await arabicRes.json();
+        if(!arabicJson || !arabicJson.data) throw new Error('Arabic data missing');
+
+        const meta = arabicJson.data;
+        surahTitle.textContent = meta.englishName + ' — ' + meta.name;
+        surahMeta.textContent = (meta.revelationType || '') + ' • ' + meta.numberOfAyahs + ' ayahs • Surah ' + meta.number;
+        // render arabic ayahs
+        arabicContent.innerHTML = '';
+        meta.ayahs.forEach(a=>{
+          const d = document.createElement('div');
+          d.className = 'ayah';
+          d.innerHTML = '<div style="display:flex;justify-content:flex-end;align-items:center"><span class="aya-num">'+a.numberInSurah+'</span></div><div style="direction:rtl">'+escapeHtml(a.text)+'</div>';
+          arabicContent.appendChild(d);
+        });
+
+        // audio: parse audioRes if available
+        if(audioRes){
+          try{
+            const audioJson = await audioRes.json();
+            // audioJson may be array of editions. Find ar.alafasy
+            if(audioJson && Array.isArray(audioJson.data)){
+              // expected structure when using /editions: data is array of edition objects corresponding to requested editions
+              // find reciter edition (audio) entries (ar.alafasy)
+              currentAyahAudioList = [];
+              audioJson.data.forEach(ed=>{
+                if(ed.edition && ed.edition.identifier && ed.edition.identifier.startsWith('ar.')){
+                  // audio edition - may include ayahs with audio URLs
+                  if(Array.isArray(ed.ayahs)){
+                    ed.ayahs.forEach(audAy=>{
+                      if(audAy.audio && audAy.audio.url) currentAyahAudioList.push(audAy.audio.url);
+                    });
+                  }
+                }
+              });
+              // If the first edition corresponded to quran-uthmani and second to ar.alafasy, we should have ayah audio URLs.
+              if(currentAyahAudioList.length === 0){
+                // fallback: some endpoints return audio differently; we will try the per-ayah audio via separate endpoint for each ayah if needed later.
+                currentAyahAudioList = [];
+              }
+            }
+          }catch(e){
+            console.warn('audio parse fail', e);
+          }
+        }
+
+        // urdu translation: quranenc returns an array of objects {sura, aya, translation}
+        let urduJson = null;
+        if(urduRes && urduRes.ok){
+          try{
+            urduJson = await urduRes.json();
+          }catch(e){
+            urduJson = null;
+          }
+        }
+        // render urdu side-by-side aligned by ayah number
+        urduContent.innerHTML = '';
+        if(urduJson && Array.isArray(urduJson)){
+          // build map by aya
+          const map = {};
+          urduJson.forEach(o=> map[o.aya] = o.translation);
+          meta.ayahs.forEach(a=>{
+            const d = document.createElement('div');
+            d.className = 'ayah';
+            const t = map[a.numberInSurah] || '';
+            d.innerHTML = '<div><strong>Ayah '+a.numberInSurah+'</strong></div><div class="urdu-text">' + escapeHtml(t) + '</div>';
+            urduContent.appendChild(d);
+          });
+        } else {
+          // if urdu not available, show placeholder with link
+          urduContent.innerHTML = '<div style="color:var(--muted)">Urdu translation not available from API for this Surah right now.</div>';
+        }
+
+        hideLoader();
+        surahArea.classList.remove('hidden');
+        // prepare recitation audio action
+      }catch(err){
+        console.error(err);
+        showError('Failed to load Surah: ' + err.message);
+      }
+    }
+
+    // button actions
+    playRecitationBtn.addEventListener('click', async ()=>{
+      if(!currentSurah) return;
+      // if we already have ayah audio list play sequentially
+      if(currentAyahAudioList && currentAyahAudioList.length){
+        playAyahSequence(0);
+        return;
+      }
+      // fallback: use per-surah recitation URL available via audio edition route:
+      // We attempt to request /surah/{n}/ar.alafasy which (in many API setups) returns audio for each ayah or a single URL.
+      try{
+        playRecitationBtn.disabled = true;
+        const r = await fetch('https://api.alquran.cloud/v1/surah/' + currentSurah + '/ar.alafasy');
+        const j = await r.json();
+        // j.data.ayahs may contain audio object
+        if(j && j.data && Array.isArray(j.data.ayahs)){
+          currentAyahAudioList = j.data.ayahs.map(a=> (a.audio && a.audio.url) ? a.audio.url : null).filter(Boolean);
+        }
+        if(currentAyahAudioList.length){
+          playAyahSequence(0);
+        } else {
+          alert('Recitation audio not available for this reciter via API. You can still use browser TTS for translation.');
+        }
+      }catch(e){
+        console.error(e);
+        alert('Could not load recitation audio: ' + e.message);
+      } finally {
+        playRecitationBtn.disabled = false;
+      }
+    });
+
+    function playAyahSequence(i){
+      if(!currentAyahAudioList || i >= currentAyahAudioList.length) {
+        // finished
+        return;
+      }
+      const url = currentAyahAudioList[i];
+      if(!url) return;
+      if(currentRecitationAudio){
+        currentRecitationAudio.pause();
+        currentRecitationAudio = null;
+      }
+      const a = new Audio(url);
+      currentRecitationAudio = a;
+      a.play().catch(e=>{
+        console.warn('Audio play failed', e);
+        alert('Browser blocked autoplay — click play and allow audio.');
+      });
+      a.onended = ()=>{
+        playAyahSequence(i+1);
+      };
+      a.onerror = ()=>{
+        console.warn('Audio error at ayah', i);
+        playAyahSequence(i+1);
+      };
+    }
+
+    playTranslationBtn.addEventListener('click', ()=>{
+      if(!currentSurah) return;
+      // collect urdu text to speak
+      const urduTexts = Array.from(urduContent.querySelectorAll('.ayah')).map(d=>{
+        const t = d.querySelector('.urdu-text');
+        return t ? t.innerText.trim() : '';
+      }).filter(Boolean);
+      if(urduTexts.length===0){
+        alert('No Urdu translation available for speech synthesis.');
+        return;
+      }
+      // stop any existing TTS
+      stopTTS();
+      // attempt to pick selected voice
+      const vname = voiceSelect.value;
+      const utter = new SpeechSynthesisUtterance(urduTexts.join('\n\n'));
+      // choose voice object
+      const voices = speechSynthesis.getVoices();
+      const voiceObj = voices.find(v=> v.name === vname) || voices.find(v=> v.lang && v.lang.startsWith('ur')) || voices[0];
+      if(voiceObj) utter.voice = voiceObj;
+      utter.rate = 0.95;
+      utter.pitch = 1;
+      currentTTSUtterance = utter;
+      speechSynthesis.speak(utter);
+    });
+
+    stopBtn.addEventListener('click', ()=>{
+      stopAudio();
+      stopTTS();
+    });
+
+    function stopAudio(){
+      if(currentRecitationAudio){
+        try{ currentRecitationAudio.pause(); currentRecitationAudio.currentTime = 0; }catch(e){}
+        currentRecitationAudio = null;
+      }
+      currentAyahAudioList = [];
+    }
+
+    function stopTTS(){
+      if(currentTTSUtterance){
+        try{ speechSynthesis.cancel(); }catch(e){}
+        currentTTSUtterance = null;
+      } else {
+        try{ speechSynthesis.cancel(); }catch(e){}
+      }
+    }
+
+    // load voices into select
+    function populateVoices(){
+      const voices = speechSynthesis.getVoices();
+      voiceSelect.innerHTML = '';
+      voices.forEach(v=>{
+        const o = document.createElement('option');
+        o.value = v.name;
+        o.textContent = v.name + ' — ' + (v.lang || 'unknown');
+        voiceSelect.appendChild(o);
+      });
+      // try to set an Urdu voice by default
+      const ur = voices.find(v=> v.lang && v.lang.startsWith('ur')) || voices.find(v=> v.lang && v.lang.startsWith('ar')) || voices[0];
+      if(ur) voiceSelect.value = ur.name;
+    }
+    populateVoices();
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.onvoiceschanged = populateVoices;
+    }
+
+    // sidebar toggle
+    collapseBtn.addEventListener('click', ()=>{
+      const sb = document.getElementById('sidebar');
+      if(sb.style.display === 'none'){ sb.style.display='block'; collapseBtn.textContent='Toggle Sidebar'; }
+      else { sb.style.display='none'; collapseBtn.textContent='Show Sidebar'; }
+    });
+
+    // view mode toggle
+    viewMode.addEventListener('change', ()=>{
+      const v = viewMode.value;
+      if(v === 'both'){ colAr.style.display='block'; colUr.style.display='block'; }
+      else if(v === 'arabic'){ colAr.style.display='block'; colUr.style.display='none'; }
+      else { colAr.style.display='none'; colUr.style.display='block'; }
+    });
+
+    // copy link: create sharable link with hash #s{n}
+    copyLink.addEventListener('click', ()=>{
+      if(!currentSurah) return;
+      const url = location.href.split('#')[0] + '#s' + currentSurah;
+      navigator.clipboard.writeText(url).then(()=>alert('Link copied to clipboard'), err=>alert('Copy failed: ' + err));
+    });
+
+    // handle hash navigation
+    function checkHash(){
+      const h = location.hash;
+      if(h && h.startsWith('#s')){
+        const n = parseInt(h.slice(2));
+        if(n>=1 && n<=114) openSurah(n);
+      }
+    }
+    window.addEventListener('hashchange', checkHash);
+
+    // small escape
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // on load
+    loadSurahList().then(()=>{
+      // if hash present open
+      checkHash();
+    });
+
+    // Expose some functions for dev console
+    window.__quranApp = {
+      openSurah, stopAudio, stopTTS
+    };
+
+  })();
+  </script>
+</body>
 </html>
+

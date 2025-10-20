@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quran Majeed with Urdu Translation</title>
+    <link rel="stylesheet" href="index.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.run/@google/genai"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app-container">
+      <nav id="sidebar">
+        <div class="sidebar-header">
+          <h1>Quran Majeed</h1>
+        </div>
+        <ul id="surah-list">
+          <!-- Surahs will be populated by JS -->
+        </ul>
+      </nav>
+      <main id="main-content">
+        <div id="welcome-message">
+          <h2>As-salamu alaykum</h2>
+          <p>Please select a Surah from the list to begin reading.</p>
+        </div>
+        <div id="surah-content" class="hidden">
+          <!-- Surah content will be populated by JS -->
+        </div>
+        <div id="loader" class="hidden">
+          <div class="spinner"></div>
+          <p>Loading Surah...</p>
+        </div>
+         <div id="error-message" class="hidden">
+          <h2>Error</h2>
+          <p>Could not load the Surah. Please try again.</p>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
